@@ -48,7 +48,11 @@ public class DistributedLockAspect {
                 .setIfAbsent(key, Thread.currentThread().getId() + "", 5, TimeUnit.MINUTES);
 
         if (Boolean.FALSE.equals(absent)) {
-            return;
+            DistributedLock distributedLock = getDistributedLockAnnotation(getMethod(joinPoint));
+            if (Boolean.FALSE.equals(distributedLock.lockFail())) {
+                return;
+            }
+            throw new RuntimeException(distributedLock.failMessage());
         }
 
         try {
@@ -95,8 +99,23 @@ public class DistributedLockAspect {
         }
 
         String key = annotation.key();
+        String keyPrefix = defaultKey + method.getClass().getName() + ":" + method.getName();
+
         if (Objects.isNull(key)) {
-            key = defaultKey + method.getClass().getName() + ":" + method.getName();
+            return keyPrefix;
+        }
+
+
+        return keyPrefix + ":" + replenishKey(key, joinPoint.getArgs());
+    }
+
+    private String replenishKey(String key, Object[] args) {
+        if (Objects.isNull(args) || args.length == 0) {
+            return key;
+        }
+
+        for (int i = 0; i < args.length; i++) {
+            key = key.replace(String.format("{%s}", i + 1), args[i].toString());
         }
         return key;
     }
